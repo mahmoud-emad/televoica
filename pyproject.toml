@@ -13,6 +13,8 @@ dependencies = [
     "faster-whisper>=1.1.0",
     # faster-whisper passes a keyword that PyAV 19 removed
     "av>=11,<19",
+    # onnxruntime 1.24+ dropped Python 3.10 wheels
+    "onnxruntime>=1.17,<1.24",
     "openai-whisper>=20231117",
     "torch>=2.0.0",
     "numpy>=1.24.0",
@@ -67,6 +69,8 @@ python = "^3.10"
 faster-whisper = ">=1.1.0"
 # faster-whisper passes a keyword that PyAV 19 removed
 av = ">=11,<19"
+# onnxruntime 1.24+ dropped Python 3.10 wheels
+onnxruntime = ">=1.17,<1.24"
 openai-whisper = ">=20231117"
 numpy = "1.26.4"
 torch = "2.2.2"
