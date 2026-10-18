@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from televoica import __version__
+from televoica.bot.announcements import announce_release
+from televoica.bot.registry import UserRegistry
 from televoica.core.audio import (
     DEFAULT_CHUNK_SECONDS,
     probe_duration_seconds,
@@ -49,6 +52,8 @@ class TelegramSTTBot:
         self.allowed_users = set(settings.telegram.allowed_users)
         self.max_file_size = settings.telegram.max_file_size_mb * 1024 * 1024  # Convert to bytes
         
+        self.registry = UserRegistry(settings.data_dir / "users.json")
+
         # Will be initialized in run()
         self.application = None
         
@@ -67,6 +72,34 @@ class TelegramSTTBot:
         if not self.allowed_users:
             return True  # No restrictions
         return user_id in self.allowed_users
+
+    async def _track_user(self, update, context):
+        """Remember private chats so they can receive release announcements.
+
+        Runs in its own handler group, so it never blocks the real handlers.
+        """
+        chat = update.effective_chat
+        user = update.effective_user
+        if chat is None or user is None or chat.type != "private":
+            return
+        if self._is_user_allowed(user.id) and self.registry.add(chat.id):
+            logger.info(f"Registered new chat {chat.id}")
+
+    async def _post_init(self, application):
+        """Announce a new release to known chats once the bot is connected."""
+        if not self.settings.telegram.announce_releases:
+            return
+        try:
+            await announce_release(
+                application.bot,
+                self.registry,
+                __version__,
+                self.settings.telegram.repo_url,
+                extra_recipients=self.allowed_users,
+            )
+        except Exception as e:
+            # Never let an announcement problem stop the bot from starting.
+            logger.error(f"Release announcement failed: {e}", exc_info=True)
 
     async def start_command(self, update, context):
         """Handle /start command."""
@@ -134,7 +167,7 @@ class TelegramSTTBot:
             f"🤖 Bot Information:\n\n"
             f"STT Provider: {provider_name}\n"
             f"Max File Size: {self.settings.telegram.max_file_size_mb} MB\n"
-            f"Version: 0.1.0"
+            f"Version: {__version__}"
         )
         
         await update.message.reply_text(info_message)
@@ -351,9 +384,13 @@ class TelegramSTTBot:
             .read_timeout(60.0)
             .write_timeout(60.0)
             .pool_timeout(30.0)
+            .post_init(self._post_init)
             .build()
         )
         
+        # Track chats first (group -1 runs before, and never blocks, the handlers below)
+        self.application.add_handler(MessageHandler(filters.ALL, self._track_user), group=-1)
+
         # Add handlers
         self.application.add_handler(CommandHandler("start", self.start_command))
         self.application.add_handler(CommandHandler("help", self.help_command))

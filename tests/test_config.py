@@ -21,7 +21,7 @@ class TestSettings:
         settings = Settings()
         
         assert settings.telegram_bot is False
-        assert settings.stt.provider == "whisper"
+        assert settings.stt.provider == "faster_whisper"
         assert settings.telegram.enabled is False
         assert settings.log_level == "INFO"
     
@@ -126,7 +126,30 @@ class TestLoadConfig:
             settings = load_config()
             
             assert settings.telegram_bot is False
-            assert settings.stt.provider == "whisper"
-            assert settings.stt.whisper_model == "base"
+            assert settings.stt.provider == "faster_whisper"
+            assert settings.stt.whisper_model == "large-v3"
             assert settings.log_level == "INFO"
 
+
+
+class TestReleaseAnnouncementSettings:
+    """Settings for persistent state and release announcements."""
+
+    def test_defaults(self):
+        with patch.dict(os.environ, {}, clear=True):
+            settings = load_config()
+        assert settings.telegram.announce_releases is True
+        assert settings.telegram.repo_url.endswith("/televoica")
+        assert settings.data_dir.name == ".televoica"
+
+    def test_env_overrides(self, tmp_path):
+        env = {
+            "STT_DATA_DIR": str(tmp_path),
+            "STT_ANNOUNCE_RELEASES": "false",
+            "STT_REPO_URL": "https://example.com/r",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            settings = load_config()
+        assert settings.data_dir == tmp_path
+        assert settings.telegram.announce_releases is False
+        assert settings.telegram.repo_url == "https://example.com/r"

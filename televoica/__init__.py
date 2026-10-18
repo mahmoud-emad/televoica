@@ -6,18 +6,20 @@ This package provides:
 2. Optional Telegram bot integration for voice message transcription
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Mahmoud-Emad"
 
 from televoica.core.engine import SpeechToTextEngine
 from televoica.core.providers import (
     STTProvider,
     WhisperProvider,
+    FasterWhisperProvider,
 )
 
 __all__ = [
     "SpeechToTextEngine",
     "STTProvider",
     "WhisperProvider",
+    "FasterWhisperProvider",
 ]
 

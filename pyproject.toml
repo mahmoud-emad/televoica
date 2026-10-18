@@ -1,6 +1,6 @@
 [project]
 name = "televoica"
-version = "0.1.0"
+version = "0.2.0"
 description = "A modular speech-to-text library with optional Telegram bot integration"
 authors = [{ name = "Mahmoud-Emad", email = "mahmmoud.hassanein@gmail.com" }]
 readme = "README.md"
@@ -10,6 +10,9 @@ requires-python = ">=3.10"
 # Install with: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)
 dependencies = [
     # Core dependencies
+    "faster-whisper>=1.1.0",
+    # faster-whisper passes a keyword that PyAV 19 removed
+    "av>=11,<19",
     "openai-whisper>=20231117",
     "torch>=2.0.0",
     "numpy>=1.24.0",
@@ -53,7 +56,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "televoica"
-version = "0.1.0"
+version = "0.2.0"
 description = "A modular speech-to-text library with optional Telegram bot integration"
 authors = ["Mahmoud-Emad <mahmmoud.hassanein@gmail.com>"]
 readme = "README.md"
@@ -61,6 +64,9 @@ packages = [{ include = "televoica" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+faster-whisper = ">=1.1.0"
+# faster-whisper passes a keyword that PyAV 19 removed
+av = ">=11,<19"
 openai-whisper = ">=20231117"
 numpy = "1.26.4"
 torch = "2.2.2"

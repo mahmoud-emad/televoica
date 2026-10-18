@@ -1,5 +1,7 @@
 """Tests for STT providers."""
 
+import sys
+
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
@@ -7,6 +9,7 @@ from unittest.mock import Mock, patch, MagicMock
 from televoica.core.providers import (
     STTProvider,
     WhisperProvider,
+    FasterWhisperProvider,
     GoogleCloudSTTProvider,
 )
 
@@ -44,8 +47,9 @@ class TestWhisperProvider:
         assert provider.device == "cuda"
         assert provider.language == "en"
     
-    @patch('whisper.load_model')
-    def test_load_model(self, mock_load_model):
+    @patch.dict(sys.modules, {"whisper": MagicMock()})
+    def test_load_model(self):
+        mock_load_model = sys.modules["whisper"].load_model
         """Test lazy loading of Whisper model."""
         mock_model = MagicMock()
         mock_load_model.return_value = mock_model
@@ -58,8 +62,9 @@ class TestWhisperProvider:
         assert provider._model == mock_model
         mock_load_model.assert_called_once_with("base", device="cpu")
 
-    @patch('whisper.load_model')
-    def test_transcribe(self, mock_load_model, tmp_path):
+    @patch.dict(sys.modules, {"whisper": MagicMock()})
+    def test_transcribe(self, tmp_path):
+        mock_load_model = sys.modules["whisper"].load_model
         """Test transcription of audio file."""
         # Setup mock
         mock_model = MagicMock()
@@ -77,8 +82,9 @@ class TestWhisperProvider:
         assert result == "Test transcription"
         mock_model.transcribe.assert_called_once()
 
-    @patch('whisper.load_model')
-    def test_transcribe_bytes(self, mock_load_model, tmp_path):
+    @patch.dict(sys.modules, {"whisper": MagicMock()})
+    def test_transcribe_bytes(self, tmp_path):
+        mock_load_model = sys.modules["whisper"].load_model
         """Test transcription of audio bytes."""
         # Setup mock
         mock_model = MagicMock()
@@ -137,3 +143,40 @@ class TestGoogleCloudSTTProvider:
         assert provider._client == mock_client
         mock_load_client.assert_called_once()
 
+
+
+class TestFasterWhisperProvider:
+    """Test cases for FasterWhisperProvider."""
+
+    def test_defaults(self):
+        """Defaults favor accuracy: large-v3, beam search, VAD."""
+        provider = FasterWhisperProvider()
+        assert provider.model_size == "large-v3"
+        assert provider.device == "auto"
+        assert provider.beam_size == 5
+        assert provider.vad_filter is True
+        assert provider.language is None
+
+    def test_transcribe_passes_accuracy_options(self, tmp_path):
+        """Language, prompt, beam search and VAD reach the model; segments are joined."""
+        provider = FasterWhisperProvider(
+            {"language": "ar", "initial_prompt": "Televoica", "beam_size": 7}
+        )
+        model = Mock()
+        info = Mock(language="ar", language_probability=0.99)
+        model.transcribe.return_value = (
+            iter([Mock(text=" hello "), Mock(text="world ")]),
+            info,
+        )
+        provider._model = model
+
+        audio = tmp_path / "a.ogg"
+        audio.write_bytes(b"x")
+
+        assert provider.transcribe(audio) == "hello world"
+        kwargs = model.transcribe.call_args.kwargs
+        assert kwargs["language"] == "ar"
+        assert kwargs["initial_prompt"] == "Televoica"
+        assert kwargs["beam_size"] == 7
+        assert kwargs["vad_filter"] is True
+        assert kwargs["condition_on_previous_text"] is False

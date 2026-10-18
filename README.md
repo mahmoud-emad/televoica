@@ -14,7 +14,7 @@ Send a voice message → Get text back. Simple as that.
 
 - **Voice to Text**: Transcribe voice messages and audio files
 - **Telegram Bot**: Easy to use via Telegram
-- **Fast & Accurate**: Powered by OpenAI Whisper
+- **Fast & Accurate**: Powered by Whisper large-v3 via faster-whisper
 - **Docker Ready**: One-command deployment
 - **Auto Monitoring**: Health checks every 30 minutes
 - **Easy Setup**: Just add your bot token
@@ -85,9 +85,13 @@ All configuration is done via the `.env` file:
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 
 # Optional - Whisper Settings
-STT_WHISPER_MODEL=base          # tiny, base, small, medium, large
-STT_WHISPER_DEVICE=cpu          # cpu or cuda
-STT_WHISPER_LANGUAGE=           # Leave empty for auto-detect
+STT_PROVIDER=faster_whisper     # faster_whisper (default), whisper (legacy), google_cloud
+STT_WHISPER_MODEL=large-v3      # large-v3, large-v3-turbo, medium, small, base, tiny
+STT_WHISPER_DEVICE=auto         # auto, cpu or cuda
+STT_WHISPER_LANGUAGE=           # Set it (e.g. ar, en) for best accuracy; empty = auto-detect
+STT_WHISPER_INITIAL_PROMPT=     # Names/terms to spell correctly
+STT_WHISPER_BEAM_SIZE=5         # Higher = more accurate, slower
+STT_WHISPER_VAD_FILTER=true     # Skip silence to avoid hallucinations
 
 # Optional - Bot Settings
 TELEGRAM_MAX_FILE_SIZE_MB=20    # Max audio file size
@@ -98,11 +102,15 @@ TELEGRAM_ALLOWED_USERS=         # Comma-separated user IDs (empty = all users)
 
 | Model  | Speed    | Accuracy | RAM   | Best For              |
 |--------|----------|----------|-------|-----------------------|
-| tiny   | Fastest  | Low      | ~1GB  | Testing               |
-| base   | Fast     | Good     | ~1GB  | **Recommended**       |
-| small  | Medium   | Better   | ~2GB  | Better accuracy       |
-| medium | Slow     | High     | ~5GB  | High accuracy needed  |
-| large  | Slowest  | Highest  | ~10GB | Maximum accuracy      |
+| tiny           | Fastest  | Low      | ~1GB  | Testing                         |
+| base           | Fast     | Fair     | ~1GB  | Low-resource machines           |
+| small          | Medium   | Better   | ~2GB  | Better accuracy                 |
+| medium         | Slow     | High     | ~3GB  | High accuracy                   |
+| large-v3-turbo | Fast     | Very high| ~3GB  | Best speed/accuracy on CPU      |
+| large-v3       | Slowest  | Highest  | ~3GB  | **Default**, maximum accuracy   |
+
+RAM figures are for faster-whisper with int8 on CPU. The first start downloads the
+model (large-v3 is ~3GB); docker-compose caches it in a volume.
 
 ## Deployment
 

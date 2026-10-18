@@ -23,7 +23,7 @@ class TestSpeechToTextEngine:
     
     def test_init_with_default_provider(self):
         """Test initialization with default provider."""
-        with patch('televoica.core.engine.WhisperProvider'):
+        with patch('televoica.core.engine.FasterWhisperProvider'):
             engine = SpeechToTextEngine()
             assert engine.provider is not None
     

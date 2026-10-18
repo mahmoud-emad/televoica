@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Union
 import logging
 
-from televoica.core.providers import STTProvider, WhisperProvider
+from televoica.core.providers import STTProvider, FasterWhisperProvider
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ class SpeechToTextEngine:
         Initialize the speech-to-text engine.
 
         Args:
-            provider: STT provider to use. If None, uses WhisperProvider with default settings.
+            provider: STT provider to use. If None, uses FasterWhisperProvider with default settings.
         """
-        self.provider = provider or WhisperProvider()
+        self.provider = provider or FasterWhisperProvider()
         logger.info(f"SpeechToTextEngine initialized with {self.provider.__class__.__name__}")
 
     def transcribe_file(self, audio_file: Union[str, Path]) -> str:

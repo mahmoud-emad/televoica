@@ -40,8 +40,12 @@ RUN apt-get update && apt-get install -y \
 
 # Create non-root user
 RUN useradd -m -u 1000 botuser && \
-    mkdir -p /tmp/televoica && \
-    chown -R botuser:botuser /tmp/televoica
+    mkdir -p /tmp/televoica /data && \
+    chown -R botuser:botuser /tmp/televoica /data
+
+# Persistent bot state (known chats, announced release); mounted as a volume
+ENV STT_DATA_DIR=/data
+VOLUME ["/data"]
 
 # Set working directory
 WORKDIR /app

@@ -144,6 +144,122 @@ class WhisperProvider(STTProvider):
             temp_path.unlink(missing_ok=True)
 
 
+class FasterWhisperProvider(STTProvider):
+    """faster-whisper (CTranslate2) provider tuned for accuracy.
+
+    Runs Whisper large-v3 by default with beam search, voice-activity
+    detection and temperature fallback, which removes most silence
+    hallucinations and repetition loops of the plain openai-whisper call.
+    """
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize faster-whisper provider.
+
+        Args:
+            config: Configuration dictionary with optional keys:
+                - model: Model name or path ('large-v3', 'large-v3-turbo', 'medium', ...)
+                - device: 'auto', 'cpu' or 'cuda'
+                - compute_type: 'auto', 'int8', 'float16', ... ('auto' picks per device)
+                - language: Language code (e.g., 'en', 'ar'); None to auto-detect
+                - initial_prompt: Text biasing spelling/vocabulary of the transcript
+                - beam_size: Beam search width (default 5)
+                - vad_filter: Skip non-speech with Silero VAD (default True)
+        """
+        super().__init__(config)
+        self.model_size = self.config.get("model") or "large-v3"
+        self.device = self.config.get("device") or "auto"
+        self.compute_type = self.config.get("compute_type") or "auto"
+        self.language = self.config.get("language") or None
+        self.initial_prompt = self.config.get("initial_prompt") or None
+        self.beam_size = int(self.config.get("beam_size") or 5)
+        self.vad_filter = self.config.get("vad_filter", True)
+        self._model = None
+
+    def _load_model(self):
+        """Lazy load the faster-whisper model."""
+        if self._model is None:
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError:
+                raise ImportError(
+                    "faster-whisper is not installed. "
+                    "Install it with: pip install faster-whisper"
+                )
+            device = self.device
+            compute_type = self.compute_type
+            if compute_type == "auto":
+                compute_type = "float16" if device == "cuda" else "int8"
+            logger.info(
+                f"Loading faster-whisper model: {self.model_size} "
+                f"(device={device}, compute_type={compute_type})"
+            )
+            self._model = WhisperModel(
+                self.model_size, device=device, compute_type=compute_type
+            )
+            logger.info("faster-whisper model loaded successfully")
+
+    def transcribe(self, audio_file: Path) -> str:
+        """
+        Transcribe audio file using faster-whisper.
+
+        Args:
+            audio_file: Path to the audio file
+
+        Returns:
+            Transcribed text
+        """
+        self._load_model()
+
+        logger.info(f"Transcribing audio file: {audio_file}")
+
+        try:
+            segments, info = self._model.transcribe(
+                str(audio_file),
+                language=self.language,
+                task="transcribe",
+                beam_size=self.beam_size,
+                best_of=self.beam_size,
+                temperature=[0.0, 0.2, 0.4, 0.6],
+                condition_on_previous_text=False,
+                initial_prompt=self.initial_prompt,
+                vad_filter=self.vad_filter,
+                vad_parameters={"min_silence_duration_ms": 500},
+            )
+            # `segments` is a lazy generator; consuming it runs the decoding.
+            text = " ".join(seg.text.strip() for seg in segments).strip()
+            logger.info(
+                f"Transcription successful: {len(text)} characters "
+                f"(language={info.language}, p={info.language_probability:.2f})"
+            )
+            return text
+        except Exception as e:
+            logger.error(f"Transcription failed: {e}")
+            raise
+
+    def transcribe_bytes(self, audio_bytes: bytes, format: str = "ogg") -> str:
+        """
+        Transcribe audio bytes using faster-whisper.
+
+        Args:
+            audio_bytes: Audio data as bytes
+            format: Audio format
+
+        Returns:
+            Transcribed text
+        """
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = Path(temp_file.name)
+
+        try:
+            return self.transcribe(temp_path)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+
 class GoogleCloudSTTProvider(STTProvider):
     """Google Cloud Televoica provider."""
 

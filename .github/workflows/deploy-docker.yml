@@ -75,9 +75,9 @@ jobs:
       run: |
         cat > .env << EOF
         TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
-        STT_PROVIDER=whisper
-        STT_WHISPER_MODEL=base
-        STT_WHISPER_DEVICE=cpu
+        STT_PROVIDER=faster_whisper
+        STT_WHISPER_MODEL=large-v3
+        STT_WHISPER_DEVICE=auto
         STT_LOG_LEVEL=INFO
         TELEGRAM_MAX_FILE_SIZE_MB=20
         EOF

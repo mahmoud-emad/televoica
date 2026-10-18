@@ -9,11 +9,13 @@ from televoica.core.engine import SpeechToTextEngine
 from televoica.core.providers import (
     STTProvider,
     WhisperProvider,
+    FasterWhisperProvider,
 )
 
 __all__ = [
     "SpeechToTextEngine",
     "STTProvider",
     "WhisperProvider",
+    "FasterWhisperProvider",
 ]
 

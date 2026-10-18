@@ -18,12 +18,18 @@ logger = logging.getLogger(__name__)
 class STTConfig:
     """Configuration for speech-to-text provider."""
     
-    provider: Literal["whisper", "google_cloud"] = "whisper"
+    provider: Literal["faster_whisper", "whisper", "google_cloud"] = "faster_whisper"
     
     # Whisper-specific settings
-    whisper_model: str = "base"
-    whisper_device: str = "cpu"
+    whisper_model: str = "large-v3"
+    whisper_device: str = "auto"
     whisper_language: Optional[str] = None
+
+    # faster-whisper-specific settings
+    whisper_compute_type: str = "auto"
+    whisper_initial_prompt: Optional[str] = None
+    whisper_beam_size: int = 5
+    whisper_vad_filter: bool = True
     
     # Google Cloud-specific settings
     google_credentials_path: Optional[str] = None
@@ -38,6 +44,8 @@ class TelegramConfig:
     bot_token: Optional[str] = None
     allowed_users: list[int] = field(default_factory=list)
     max_file_size_mb: int = 20
+    announce_releases: bool = True
+    repo_url: str = "https://github.com/Mahmoud-Emad/televoica"
 
 
 @dataclass
@@ -59,10 +67,14 @@ class Settings:
     # Storage
     temp_dir: Path = field(default_factory=lambda: Path("/tmp/televoica"))
 
+    # Persistent state (known chats, last announced release). Must survive restarts.
+    data_dir: Path = field(default_factory=lambda: Path.home() / ".televoica")
+
     def __post_init__(self):
         """Validate and process settings after initialization."""
         # Ensure temp directory exists
         self.temp_dir = Path(self.temp_dir)
+        self.data_dir = Path(self.data_dir)
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         
         # If telegram_bot mode is enabled, ensure telegram is also enabled
@@ -94,10 +106,17 @@ def load_config(
     Environment variables:
         STT_TELEGRAM_BOT: Enable Telegram bot mode (true/false)
         STT_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
-        STT_PROVIDER: STT provider to use (whisper, google_cloud)
+        STT_PROVIDER: STT provider to use (faster_whisper, whisper, google_cloud)
         STT_WHISPER_MODEL: Whisper model size (tiny, base, small, medium, large)
         STT_WHISPER_DEVICE: Device to run Whisper on (cpu, cuda)
         STT_WHISPER_LANGUAGE: Language code for Whisper
+        STT_WHISPER_COMPUTE_TYPE: faster-whisper compute type (auto, int8, float16, ...)
+        STT_WHISPER_INITIAL_PROMPT: Text to bias vocabulary/spelling (faster-whisper)
+        STT_WHISPER_BEAM_SIZE: Beam search width (faster-whisper)
+        STT_WHISPER_VAD_FILTER: Skip silence with VAD (true/false, faster-whisper)
+        STT_DATA_DIR: Directory for persistent state (known chats, announced release)
+        STT_ANNOUNCE_RELEASES: Message users release notes after an update (true/false)
+        STT_REPO_URL: Repository URL used for release-note links
         TELEGRAM_BOT_TOKEN: Telegram bot token
         TELEGRAM_ALLOWED_USERS: Comma-separated list of allowed user IDs
     """
@@ -117,11 +136,16 @@ def load_config(
         telegram_bot=config_dict.get("telegram_bot", False),
         log_level=config_dict.get("log_level", "INFO"),
         temp_dir=Path(config_dict.get("temp_dir", "/tmp/televoica")),
+        data_dir=Path(config_dict.get("data_dir", Path.home() / ".televoica")),
         stt=STTConfig(
-            provider=config_dict.get("stt_provider", "whisper"),
-            whisper_model=config_dict.get("whisper_model", "base"),
-            whisper_device=config_dict.get("whisper_device", "cpu"),
+            provider=config_dict.get("stt_provider", "faster_whisper"),
+            whisper_model=config_dict.get("whisper_model", "large-v3"),
+            whisper_device=config_dict.get("whisper_device", "auto"),
             whisper_language=config_dict.get("whisper_language"),
+            whisper_compute_type=config_dict.get("whisper_compute_type", "auto"),
+            whisper_initial_prompt=config_dict.get("whisper_initial_prompt"),
+            whisper_beam_size=int(config_dict.get("whisper_beam_size", 5)),
+            whisper_vad_filter=config_dict.get("whisper_vad_filter", True),
             google_credentials_path=config_dict.get("google_credentials_path"),
             google_language_code=config_dict.get("google_language_code", "en-US"),
         ),
@@ -130,6 +154,8 @@ def load_config(
             bot_token=config_dict.get("telegram_bot_token"),
             allowed_users=config_dict.get("telegram_allowed_users", []),
             max_file_size_mb=config_dict.get("telegram_max_file_size_mb", 20),
+            announce_releases=config_dict.get("announce_releases", True),
+            repo_url=config_dict.get("repo_url", TelegramConfig.repo_url),
         ),
     )
     
@@ -173,15 +199,23 @@ def _load_from_env(prefix: str = "STT_") -> Dict[str, Any]:
     
     # STT provider
     if os.getenv(f"{prefix}PROVIDER"):
-        config["stt_provider"] = os.getenv(f"{prefix}PROVIDER", "whisper")
+        config["stt_provider"] = os.getenv(f"{prefix}PROVIDER", "faster_whisper")
     
     # Whisper settings
     if os.getenv(f"{prefix}WHISPER_MODEL"):
-        config["whisper_model"] = os.getenv(f"{prefix}WHISPER_MODEL", "base")
+        config["whisper_model"] = os.getenv(f"{prefix}WHISPER_MODEL", "large-v3")
     if os.getenv(f"{prefix}WHISPER_DEVICE"):
-        config["whisper_device"] = os.getenv(f"{prefix}WHISPER_DEVICE", "cpu")
+        config["whisper_device"] = os.getenv(f"{prefix}WHISPER_DEVICE", "auto")
     if os.getenv(f"{prefix}WHISPER_LANGUAGE"):
         config["whisper_language"] = os.getenv(f"{prefix}WHISPER_LANGUAGE")
+    if os.getenv(f"{prefix}WHISPER_COMPUTE_TYPE"):
+        config["whisper_compute_type"] = os.getenv(f"{prefix}WHISPER_COMPUTE_TYPE")
+    if os.getenv(f"{prefix}WHISPER_INITIAL_PROMPT"):
+        config["whisper_initial_prompt"] = os.getenv(f"{prefix}WHISPER_INITIAL_PROMPT")
+    if os.getenv(f"{prefix}WHISPER_BEAM_SIZE"):
+        config["whisper_beam_size"] = int(os.getenv(f"{prefix}WHISPER_BEAM_SIZE", "5"))
+    if os.getenv(f"{prefix}WHISPER_VAD_FILTER"):
+        config["whisper_vad_filter"] = os.getenv(f"{prefix}WHISPER_VAD_FILTER", "").lower() in ["true", "1", "yes"]
     
     # Google Cloud settings
     if os.getenv(f"{prefix}GOOGLE_CREDENTIALS_PATH"):
@@ -202,6 +236,14 @@ def _load_from_env(prefix: str = "STT_") -> Dict[str, Any]:
     if os.getenv("TELEGRAM_MAX_FILE_SIZE_MB"):
         config["telegram_max_file_size_mb"] = int(os.getenv("TELEGRAM_MAX_FILE_SIZE_MB", "20"))
     
+    # Persistent state and release announcements
+    if os.getenv(f"{prefix}DATA_DIR"):
+        config["data_dir"] = os.getenv(f"{prefix}DATA_DIR")
+    if os.getenv(f"{prefix}ANNOUNCE_RELEASES"):
+        config["announce_releases"] = os.getenv(f"{prefix}ANNOUNCE_RELEASES", "").lower() in ["true", "1", "yes"]
+    if os.getenv(f"{prefix}REPO_URL"):
+        config["repo_url"] = os.getenv(f"{prefix}REPO_URL")
+
     # Temp directory
     if os.getenv(f"{prefix}TEMP_DIR"):
         config["temp_dir"] = os.getenv(f"{prefix}TEMP_DIR", "/tmp/televoica")

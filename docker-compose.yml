@@ -14,21 +14,33 @@ services:
       STT_TELEGRAM_BOT: "true"
       
       # STT Provider settings
-      STT_PROVIDER: ${STT_PROVIDER:-whisper}
-      STT_WHISPER_MODEL: ${STT_WHISPER_MODEL:-base}
-      STT_WHISPER_DEVICE: ${STT_WHISPER_DEVICE:-cpu}
+      STT_PROVIDER: ${STT_PROVIDER:-faster_whisper}
+      STT_WHISPER_MODEL: ${STT_WHISPER_MODEL:-large-v3}
+      STT_WHISPER_DEVICE: ${STT_WHISPER_DEVICE:-auto}
+      STT_WHISPER_COMPUTE_TYPE: ${STT_WHISPER_COMPUTE_TYPE:-auto}
       STT_WHISPER_LANGUAGE: ${STT_WHISPER_LANGUAGE:-}
+      STT_WHISPER_INITIAL_PROMPT: ${STT_WHISPER_INITIAL_PROMPT:-}
+      STT_WHISPER_BEAM_SIZE: ${STT_WHISPER_BEAM_SIZE:-5}
+      STT_WHISPER_VAD_FILTER: ${STT_WHISPER_VAD_FILTER:-true}
       
       # Telegram settings
       TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
       TELEGRAM_MAX_FILE_SIZE_MB: ${TELEGRAM_MAX_FILE_SIZE_MB:-20}
       
+      # Release announcements
+      STT_DATA_DIR: /data
+      STT_ANNOUNCE_RELEASES: ${STT_ANNOUNCE_RELEASES:-true}
+
       # Logging
       STT_LOG_LEVEL: ${STT_LOG_LEVEL:-INFO}
     
     volumes:
       # Persist temporary files
       - televoica-temp:/tmp/televoica
+      # Cache downloaded models (large-v3 is ~3 GB) across restarts
+      - televoica-models:/home/botuser/.cache
+      # Known chats + last announced release (must persist across updates)
+      - televoica-data:/data
       # Optional: Mount logs directory (comment out if you get permission errors)
       # - ./logs:/app/logs
     
@@ -36,11 +48,11 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
           cpus: '2'
           memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
     
     # Health check
     healthcheck:
@@ -59,5 +71,9 @@ services:
 
 volumes:
   televoica-temp:
+    driver: local
+  televoica-models:
+    driver: local
+  televoica-data:
     driver: local
 

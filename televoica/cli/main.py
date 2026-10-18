@@ -13,7 +13,11 @@ from typing import Optional
 import argparse
 
 from televoica.core.engine import SpeechToTextEngine
-from televoica.core.providers import WhisperProvider, GoogleCloudSTTProvider
+from televoica.core.providers import (
+    FasterWhisperProvider,
+    GoogleCloudSTTProvider,
+    WhisperProvider,
+)
 from televoica.config.settings import load_config, Settings
 
 
@@ -34,7 +38,13 @@ def transcribe_command(args):
     logger = logging.getLogger(__name__)
     
     # Create provider based on arguments
-    if args.provider == "whisper":
+    if args.provider == "faster_whisper":
+        provider = FasterWhisperProvider({
+            "model": args.whisper_model,
+            "device": args.device,
+            "language": args.language,
+        })
+    elif args.provider == "whisper":
         provider = WhisperProvider({
             "model": args.whisper_model,
             "device": args.device,
@@ -102,7 +112,17 @@ def bot_command(args):
     settings.telegram_bot = True
     
     # Create STT provider
-    if settings.stt.provider == "whisper":
+    if settings.stt.provider == "faster_whisper":
+        provider = FasterWhisperProvider({
+            "model": settings.stt.whisper_model,
+            "device": settings.stt.whisper_device,
+            "compute_type": settings.stt.whisper_compute_type,
+            "language": settings.stt.whisper_language,
+            "initial_prompt": settings.stt.whisper_initial_prompt,
+            "beam_size": settings.stt.whisper_beam_size,
+            "vad_filter": settings.stt.whisper_vad_filter,
+        })
+    elif settings.stt.provider == "whisper":
         provider = WhisperProvider({
             "model": settings.stt.whisper_model,
             "device": settings.stt.whisper_device,
@@ -180,21 +200,20 @@ Examples:
     )
     transcribe_parser.add_argument(
         "-p", "--provider",
-        choices=["whisper", "google_cloud"],
-        default="whisper",
-        help="STT provider to use (default: whisper)"
+        choices=["faster_whisper", "whisper", "google_cloud"],
+        default="faster_whisper",
+        help="STT provider to use (default: faster_whisper)"
     )
     transcribe_parser.add_argument(
         "--whisper-model",
-        choices=["tiny", "base", "small", "medium", "large"],
-        default="base",
-        help="Whisper model size (default: base)"
+        default="large-v3",
+        help="Whisper model, e.g. tiny, base, small, medium, large-v3, large-v3-turbo (default: large-v3)"
     )
     transcribe_parser.add_argument(
         "--device",
-        choices=["cpu", "cuda"],
-        default="cpu",
-        help="Device to run on (default: cpu)"
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Device to run on (default: auto)"
     )
     transcribe_parser.add_argument(
         "-l", "--language",
@@ -217,17 +236,16 @@ Examples:
     )
     bot_parser.add_argument(
         "-p", "--provider",
-        choices=["whisper", "google_cloud"],
+        choices=["faster_whisper", "whisper", "google_cloud"],
         help="STT provider to use (overrides config file)"
     )
     bot_parser.add_argument(
         "--whisper-model",
-        choices=["tiny", "base", "small", "medium", "large"],
-        help="Whisper model size (overrides config file)"
+        help="Whisper model, e.g. small, medium, large-v3 (overrides config file)"
     )
     bot_parser.add_argument(
         "--device",
-        choices=["cpu", "cuda"],
+        choices=["auto", "cpu", "cuda"],
         help="Device to run on (overrides config file)"
     )
     bot_parser.set_defaults(func=bot_command)
