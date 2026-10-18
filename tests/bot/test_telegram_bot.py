@@ -22,7 +22,13 @@ def make_bot(tmp_path, allowed=None, announce=True):
 
 def update(user_id, chat_id, chat_type="private"):
     return SimpleNamespace(
-        effective_user=SimpleNamespace(id=user_id),
+        effective_user=SimpleNamespace(
+            id=user_id,
+            username="ann",
+            first_name="Ann",
+            last_name=None,
+            language_code="ar",
+        ),
         effective_chat=SimpleNamespace(id=chat_id, type=chat_type),
     )
 
@@ -31,6 +37,8 @@ def test_tracks_private_chats(tmp_path):
     bot = make_bot(tmp_path)
     asyncio.run(bot._track_user(update(7, 7), None))
     assert bot.registry.chat_ids == {7}
+    user = bot.registry.get(7)
+    assert (user["username"], user["first_name"], user["language_code"]) == ("ann", "Ann", "ar")
 
 
 def test_ignores_group_chats_and_disallowed_users(tmp_path):
@@ -65,3 +73,12 @@ def test_post_init_respects_opt_out_and_swallows_errors(tmp_path):
         new=AsyncMock(side_effect=RuntimeError("telegram down")),
     ):
         asyncio.run(on._post_init(SimpleNamespace(bot=AsyncMock())))  # must not raise
+
+
+def test_record_request_stores_usage_and_never_raises(tmp_path):
+    bot = make_bot(tmp_path)
+    bot._record_request(7, "voice message", True, 12.0, "hello")
+    assert bot.registry.get(7)["request_count"] == 1
+
+    bot.registry.record_request = MagicMock(side_effect=RuntimeError("disk full"))
+    bot._record_request(7, "voice message", True, 12.0, "hello")  # must not raise

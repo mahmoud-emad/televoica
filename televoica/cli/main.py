@@ -94,6 +94,31 @@ def transcribe_command(args):
         sys.exit(1)
 
 
+def users_command(args):
+    """List the users known to the bot (read-only)."""
+    from televoica.bot.registry import UserRegistry
+
+    settings = load_config()
+    db_path = settings.data_dir / "televoica.db"
+    if not db_path.exists():
+        print(f"No user database at {db_path}")
+        sys.exit(1)
+
+    registry = UserRegistry(db_path)
+    stats = registry.stats()
+    print(f"{stats['users']} users ({stats['blocked']} blocked), {stats['requests']} requests\n")
+    print(f"{'ID':<12} {'Name':<24} {'Username':<20} {'Lang':<5} {'Reqs':>5}  {'First seen':<11} Last seen")
+    for u in registry.list_users():
+        name = f"{u['first_name'] or ''} {u['last_name'] or ''}".strip()
+        username = f"@{u['username']}" if u["username"] else "-"
+        flag = " (blocked)" if u["blocked"] else ""
+        print(
+            f"{u['user_id']:<12} {name[:24]:<24} {username[:20]:<20} "
+            f"{(u['language_code'] or '-'):<5} {u['request_count']:>5}  "
+            f"{u['first_seen'][:10]:<11} {u['last_seen'][:10]}{flag}"
+        )
+
+
 def bot_command(args):
     """Handle the bot command (Telegram bot mode)."""
     setup_logging(args.log_level)
@@ -233,6 +258,13 @@ Examples:
         help="Device to run on (overrides config file)"
     )
     bot_parser.set_defaults(func=bot_command)
+
+    # Users command (inspect the user database)
+    users_parser = subparsers.add_parser(
+        "users",
+        help="List the users the bot knows (reads STT_DATA_DIR)"
+    )
+    users_parser.set_defaults(func=users_command)
     
     # Parse arguments
     args = parser.parse_args()

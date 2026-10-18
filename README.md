@@ -126,6 +126,17 @@ model (large-v3 is ~3GB); docker-compose caches it in a volume.
 
 The bot will be automatically deployed and monitored!
 
+## Users
+
+The bot keeps a SQLite database (`$STT_DATA_DIR/televoica.db`) of everyone who uses it:
+Telegram name, username, language, first/last seen, request count, and a log of each
+request (type, audio length, success). Audio and transcripts are never stored.
+
+```bash
+televoica users                                      # list users and usage
+python scripts/backfill_users.py bot.log --fetch-profiles   # import history from an old log
+```
+
 ## Development
 
 ```bash

@@ -52,7 +52,7 @@ class TelegramSTTBot:
         self.allowed_users = set(settings.telegram.allowed_users)
         self.max_file_size = settings.telegram.max_file_size_mb * 1024 * 1024  # Convert to bytes
         
-        self.registry = UserRegistry(settings.data_dir / "users.json")
+        self.registry = UserRegistry(settings.data_dir / "televoica.db")
 
         # Will be initialized in run()
         self.application = None
@@ -82,8 +82,25 @@ class TelegramSTTBot:
         user = update.effective_user
         if chat is None or user is None or chat.type != "private":
             return
-        if self._is_user_allowed(user.id) and self.registry.add(chat.id):
-            logger.info(f"Registered new chat {chat.id}")
+        if not self._is_user_allowed(user.id):
+            return
+        if self.registry.upsert(
+            user.id,
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            language_code=user.language_code,
+        ):
+            logger.info(f"Registered new user {user.id} (@{user.username})")
+
+    def _record_request(self, user_id, kind, ok, duration, text) -> None:
+        """Log the request for usage stats; must never break the reply."""
+        try:
+            self.registry.record_request(
+                user_id, kind, ok, audio_seconds=duration, chars=len(text or "")
+            )
+        except Exception as e:
+            logger.warning(f"Could not record request for user {user_id}: {e}")
 
     async def _post_init(self, application):
         """Announce a new release to known chats once the bot is connected."""
@@ -249,6 +266,9 @@ class TelegramSTTBot:
         file_path = self.settings.temp_dir / f"{file_id}{file_suffix}"
         chunk_dir: Optional[Path] = None
 
+        duration = None
+        text = ""
+        ok = False
         try:
             tg_file = await context.bot.get_file(file_id)
             await tg_file.download_to_drive(file_path)
@@ -270,6 +290,7 @@ class TelegramSTTBot:
 
             if text:
                 await self._send_transcription(processing_msg, text)
+                ok = True
                 logger.info(f"Transcription sent to user {user_id}")
             else:
                 await processing_msg.edit_text("⚠️ No speech detected in the audio.")
@@ -280,6 +301,7 @@ class TelegramSTTBot:
                 f"❌ Error processing {kind}: {str(e)}"
             )
         finally:
+            self._record_request(user_id, kind, ok, duration, text)
             file_path.unlink(missing_ok=True)
             if chunk_dir is not None:
                 shutil.rmtree(chunk_dir, ignore_errors=True)
