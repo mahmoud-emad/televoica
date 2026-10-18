@@ -15,6 +15,7 @@ import argparse
 from televoica.core.engine import SpeechToTextEngine
 from televoica.core.providers import (
     FasterWhisperProvider,
+    create_provider,
     GoogleCloudSTTProvider,
     WhisperProvider,
 )
@@ -30,6 +31,8 @@ def setup_logging(level: str = "INFO"):
             logging.StreamHandler(sys.stdout)
         ]
     )
+    # httpx logs every request URL, which contains the bot token
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def transcribe_command(args):
@@ -112,29 +115,10 @@ def bot_command(args):
     settings.telegram_bot = True
     
     # Create STT provider
-    if settings.stt.provider == "faster_whisper":
-        provider = FasterWhisperProvider({
-            "model": settings.stt.whisper_model,
-            "device": settings.stt.whisper_device,
-            "compute_type": settings.stt.whisper_compute_type,
-            "language": settings.stt.whisper_language,
-            "initial_prompt": settings.stt.whisper_initial_prompt,
-            "beam_size": settings.stt.whisper_beam_size,
-            "vad_filter": settings.stt.whisper_vad_filter,
-        })
-    elif settings.stt.provider == "whisper":
-        provider = WhisperProvider({
-            "model": settings.stt.whisper_model,
-            "device": settings.stt.whisper_device,
-            "language": settings.stt.whisper_language,
-        })
-    elif settings.stt.provider == "google_cloud":
-        provider = GoogleCloudSTTProvider({
-            "credentials_path": settings.stt.google_credentials_path,
-            "language_code": settings.stt.google_language_code,
-        })
-    else:
-        logger.error(f"Unknown provider: {settings.stt.provider}")
+    try:
+        provider = create_provider(settings.stt)
+    except ValueError as e:
+        logger.error(str(e))
         sys.exit(1)
     
     # Create engine

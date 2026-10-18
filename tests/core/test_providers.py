@@ -180,3 +180,23 @@ class TestFasterWhisperProvider:
         assert kwargs["beam_size"] == 7
         assert kwargs["vad_filter"] is True
         assert kwargs["condition_on_previous_text"] is False
+
+
+class TestCreateProvider:
+    """create_provider maps settings to the right provider class."""
+
+    def test_default_settings_give_faster_whisper_large_v3(self):
+        from televoica.config.settings import STTConfig
+        from televoica.core.providers import create_provider
+
+        provider = create_provider(STTConfig())
+        assert isinstance(provider, FasterWhisperProvider)
+        assert provider.model_size == "large-v3"
+
+    def test_legacy_and_unknown_providers(self):
+        from televoica.config.settings import STTConfig
+        from televoica.core.providers import create_provider
+
+        assert isinstance(create_provider(STTConfig(provider="whisper")), WhisperProvider)
+        with pytest.raises(ValueError):
+            create_provider(STTConfig(provider="nope"))

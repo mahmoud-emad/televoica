@@ -348,3 +348,33 @@ class GoogleCloudSTTProvider(STTProvider):
         logger.info(f"Transcription successful: {len(text)} characters")
         return text
 
+
+
+def create_provider(stt) -> STTProvider:
+    """Build the provider selected in an ``STTConfig``.
+
+    Raises:
+        ValueError: If the configured provider name is unknown.
+    """
+    if stt.provider == "faster_whisper":
+        return FasterWhisperProvider({
+            "model": stt.whisper_model,
+            "device": stt.whisper_device,
+            "compute_type": stt.whisper_compute_type,
+            "language": stt.whisper_language,
+            "initial_prompt": stt.whisper_initial_prompt,
+            "beam_size": stt.whisper_beam_size,
+            "vad_filter": stt.whisper_vad_filter,
+        })
+    if stt.provider == "whisper":
+        return WhisperProvider({
+            "model": stt.whisper_model,
+            "device": stt.whisper_device,
+            "language": stt.whisper_language,
+        })
+    if stt.provider == "google_cloud":
+        return GoogleCloudSTTProvider({
+            "credentials_path": stt.google_credentials_path,
+            "language_code": stt.google_language_code,
+        })
+    raise ValueError(f"Unknown provider: {stt.provider}")

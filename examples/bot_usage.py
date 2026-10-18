@@ -14,7 +14,7 @@ import os
 import logging
 from pathlib import Path
 from televoica.core.engine import SpeechToTextEngine
-from televoica.core.providers import WhisperProvider
+from televoica.core.providers import create_provider
 from televoica.bot.telegram_bot import TelegramSTTBot
 from televoica.config.settings import load_config
 
@@ -62,6 +62,8 @@ def run_bot():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    # httpx logs every request URL, which contains the bot token
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     # Load configuration from environment variables (.env file)
     settings = load_config()
@@ -84,11 +86,7 @@ def run_bot():
     print()
 
     # Create STT engine
-    provider = WhisperProvider({
-        "model": settings.stt.whisper_model,
-        "device": settings.stt.whisper_device,
-        "language": settings.stt.whisper_language,
-    })
+    provider = create_provider(settings.stt)
     engine = SpeechToTextEngine(provider=provider)
 
     # Create and run bot
